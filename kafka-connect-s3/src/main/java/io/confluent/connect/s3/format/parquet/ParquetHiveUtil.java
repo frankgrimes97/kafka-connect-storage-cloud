@@ -16,6 +16,7 @@
 package io.confluent.connect.s3.format.parquet;
 
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.storage.common.StorageCommonConfig;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.hadoop.fs.Path;
@@ -73,9 +74,13 @@ public class ParquetHiveUtil extends HiveUtil {
     table.setTableType(TableType.EXTERNAL_TABLE);
     table.getParameters().put("EXTERNAL", "TRUE");
 
-    String s3BucketName = config.getBucketName();
-    String tablePath = String.format("s3://%s/%s",
+    final String s3Protocol = config.getHiveS3Protocol();
+    final String s3BucketName = config.getBucketName();
+    final String topicsDir = config.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
+    String tablePath = String.format("%s://%s/%s/%s/",
+        s3Protocol,
         s3BucketName,
+        topicsDir,
         topic
     );
     table.setDataLocation(new Path(tablePath));

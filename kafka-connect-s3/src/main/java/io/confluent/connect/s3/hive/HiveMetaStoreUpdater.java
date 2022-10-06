@@ -35,6 +35,8 @@ public interface HiveMetaStoreUpdater {
 
   Queue<Future<Void>> getHiveUpdateFutures();
 
+  void apply();
+
   void shutdown();
 
 }

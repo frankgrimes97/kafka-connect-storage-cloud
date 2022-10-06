@@ -12,6 +12,9 @@ build/
 .project
 .settings/
 
+# Netbeans
+nb-configuration.xml
+
 # Hive metastore
 metastore_db/
 derby.log

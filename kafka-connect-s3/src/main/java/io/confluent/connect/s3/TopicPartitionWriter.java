@@ -281,6 +281,7 @@ public class TopicPartitionWriter {
         // fallthrough
       case SHOULD_ROTATE:
         commitFiles();
+        hiveMetaStoreUpdater.apply();
         nextState();
         // fallthrough
       case FILE_COMMITTED:
@@ -329,6 +330,7 @@ public class TopicPartitionWriter {
           tp
       );
       hiveMetaStoreUpdater.alterHiveSchema(hiveTableName, currentValueSchema);
+      hiveMetaStoreUpdater.apply();
 
       nextState();
       return true;

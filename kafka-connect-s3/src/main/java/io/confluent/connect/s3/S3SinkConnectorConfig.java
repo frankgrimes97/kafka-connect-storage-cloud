@@ -235,6 +235,12 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           + "It must contain '${topic}' to inject the corresponding topic name.";
   private static final String HIVE_TABLE_NAME_DISPLAY = "Hive table name";
 
+  public static final String HIVE_S3_PROTOCOL_CONFIG = "hive.s3.protocol";
+  public static final String HIVE_S3_PROTOCOL_DEFAULT = "s3";
+  public static final String HIVE_S3_PROTOCOL_DOC = "The protocol used when generating Hive "
+          + "table LOCATION.";
+  public static final String HIVE_S3_PROTOCOL_DISPLAY = "Hive s3 protocol";
+
   static {
     STORAGE_CLASS_RECOMMENDER.addValidValues(
         Collections.singletonList(S3Storage.class)
@@ -742,6 +748,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.SHORT,
           HIVE_TABLE_NAME_DISPLAY
       );
+
+      configDef.define(
+          HIVE_S3_PROTOCOL_CONFIG,
+          Type.STRING,
+          HIVE_S3_PROTOCOL_DEFAULT,
+          Importance.LOW,
+          HIVE_S3_PROTOCOL_DOC,
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          HIVE_S3_PROTOCOL_DISPLAY
+      );
     }
     return configDef;
   }
@@ -1242,6 +1260,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
               "${topic}",
               getNormalizeHiveTableName(topic)
             );
+  }
+
+  public String getHiveS3Protocol() {
+    return getString(HIVE_S3_PROTOCOL_CONFIG);
   }
 
   public enum IgnoreOrFailBehavior {

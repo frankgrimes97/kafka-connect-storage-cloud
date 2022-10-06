@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -43,6 +44,7 @@ public class HiveMetaStoreUpdaterImpl implements HiveMetaStoreUpdater {
   private HiveMetaStore hiveMetaStore;
   private String hiveDatabase;
   private ExecutorService executorService;
+  private Queue<Callable<Void>> deferredTasks;
   private Queue<Future<Void>> hiveUpdateFutures;
   private Set<String> hivePartitions;
   private HiveUtil hiveUtil;
@@ -73,7 +75,9 @@ public class HiveMetaStoreUpdaterImpl implements HiveMetaStoreUpdater {
       }
       this.hiveDatabase = connectorConfig.getString(HiveConfig.HIVE_DATABASE_CONFIG);
       this.executorService = Executors.newSingleThreadExecutor();
+      this.deferredTasks = new LinkedList<>();
       this.hiveUpdateFutures = new LinkedList<>();
+      this.deferredTasks = new LinkedList<>();
       this.hivePartitions = new HashSet<>();
     }
   }
@@ -87,7 +91,7 @@ public class HiveMetaStoreUpdaterImpl implements HiveMetaStoreUpdater {
     if (!hiveIntegrationEnabled) {
       return;
     }
-    Future<Void> future = executorService.submit(() -> {
+    deferredTasks.add(() -> {
       try {
         this.hiveUtil.createTable(hiveDatabase, tableName, schema, partitioner, tp.topic());
       } catch (Throwable e) {
@@ -95,14 +99,13 @@ public class HiveMetaStoreUpdaterImpl implements HiveMetaStoreUpdater {
       }
       return null;
     });
-    hiveUpdateFutures.add(future);
   }
 
   public void alterHiveSchema(final String tableName, final Schema schema) {
     if (!hiveIntegrationEnabled) {
       return;
     }
-    Future<Void> future = executorService.submit(() -> {
+    deferredTasks.add(() -> {
       try {
         this.hiveUtil.alterSchema(hiveDatabase, tableName, schema);
       } catch (Throwable e) {
@@ -110,14 +113,13 @@ public class HiveMetaStoreUpdaterImpl implements HiveMetaStoreUpdater {
       }
       return null;
     });
-    hiveUpdateFutures.add(future);
   }
 
   public void addHivePartition(final String tableName, final String location) {
     if (!hiveIntegrationEnabled || hivePartitions.contains(location)) {
       return;
     }
-    Future<Void> future = executorService.submit(() -> {
+    deferredTasks.add(() -> {
       try {
         hiveMetaStore.addPartition(hiveDatabase, tableName, location);
       } catch (Throwable e) {
@@ -125,11 +127,17 @@ public class HiveMetaStoreUpdaterImpl implements HiveMetaStoreUpdater {
       }
       return null;
     });
-    hiveUpdateFutures.add(future);
   }
 
   public Queue<Future<Void>> getHiveUpdateFutures() {
     return hiveUpdateFutures;
+  }
+
+  public void apply() {
+    for (Callable<Void> task : deferredTasks) {
+      hiveUpdateFutures.add(executorService.submit(task));
+    }
+    deferredTasks.clear();
   }
 
   @Override
@@ -151,6 +159,9 @@ public class HiveMetaStoreUpdaterImpl implements HiveMetaStoreUpdater {
       );
       executorService.shutdownNow();
     }
+    deferredTasks.clear();
+    hiveUpdateFutures.clear();
+    hivePartitions.clear();
   }
 
 }

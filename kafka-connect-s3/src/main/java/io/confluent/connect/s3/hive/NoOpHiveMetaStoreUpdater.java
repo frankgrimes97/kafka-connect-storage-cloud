@@ -50,6 +50,11 @@ public class NoOpHiveMetaStoreUpdater implements HiveMetaStoreUpdater {
   }
 
   @Override
+  public void apply() {
+    // no-op
+  }
+
+  @Override
   public void shutdown() {
     // no-op
   }

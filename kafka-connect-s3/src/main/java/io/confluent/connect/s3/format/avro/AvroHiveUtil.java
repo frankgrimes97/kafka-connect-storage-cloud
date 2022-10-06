@@ -29,6 +29,7 @@ import java.util.List;
 
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.s3.S3SinkConnectorConfig;
+import io.confluent.connect.storage.common.StorageCommonConfig;
 import io.confluent.connect.storage.errors.HiveMetaStoreException;
 import io.confluent.connect.storage.hive.HiveMetaStore;
 import io.confluent.connect.storage.hive.HiveSchemaConverter;
@@ -46,6 +47,7 @@ public class AvroHiveUtil extends HiveUtil {
   private static final String AVRO_SCHEMA_LITERAL = "avro.schema.literal";
   private final AvroData avroData;
   private final S3SinkConnectorConfig config;
+  private final String s3Protocol;
 
   public AvroHiveUtil(
       S3SinkConnectorConfig conf, AvroData avroData, HiveMetaStore
@@ -54,6 +56,7 @@ public class AvroHiveUtil extends HiveUtil {
     super(conf, hiveMetaStore);
     this.avroData = avroData;
     this.config = conf;
+    this.s3Protocol = conf.getHiveS3Protocol();
   }
 
   @Override
@@ -92,9 +95,13 @@ public class AvroHiveUtil extends HiveUtil {
     table.setTableType(TableType.EXTERNAL_TABLE);
     table.getParameters().put("EXTERNAL", "TRUE");
 
-    String s3BucketName = config.getBucketName();
-    String tablePath = String.format("s3://%s/%s",
+    final String s3Protocol = config.getHiveS3Protocol();
+    final String s3BucketName = config.getBucketName();
+    final String topicsDir = config.getString(StorageCommonConfig.TOPICS_DIR_CONFIG);
+    String tablePath = String.format("%s://%s/%s/%s/",
+        s3Protocol,
         s3BucketName,
+        topicsDir,
         topic
     );
     table.setDataLocation(new Path(tablePath));
