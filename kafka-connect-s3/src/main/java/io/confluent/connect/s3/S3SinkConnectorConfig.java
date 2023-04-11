@@ -193,6 +193,10 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
   public static final String MAX_OPEN_FILES_PER_PARTITION_CONFIG = "max.open.files.per.partition";
   public static final int MAX_OPEN_FILES_PER_PARTITION_DEFAULT = 1;
 
+  public static final String SEPARATE_FILE_PER_SCHEMA_VERSION_CONFIG =
+      "separate.file.per.schema.version";
+  public static final boolean SEPARATE_FILE_PER_SCHEMA_VERSION_DEFAULT = false;
+
   private final String name;
 
   private final Map<String, ComposableConfig> propertyToConfig = new HashMap<>();
@@ -731,6 +735,18 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           ++orderInGroup,
           Width.LONG,
           "Max open files per partition"
+      );
+
+      configDef.define(
+          SEPARATE_FILE_PER_SCHEMA_VERSION_CONFIG,
+          Type.BOOLEAN,
+          SEPARATE_FILE_PER_SCHEMA_VERSION_DEFAULT,
+          Importance.LOW,
+          "Separate file per schema version.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Separate file per schema version"
       );
 
     }
