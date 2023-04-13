@@ -644,129 +644,6 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.SHORT,
           "Behavior for null-valued records"
       );
-    }
-
-    {
-      final String group = "Keys and Headers";
-      int orderInGroup = 0;
-
-      configDef.define(
-          STORE_KAFKA_KEYS_CONFIG,
-          Type.BOOLEAN,
-          false,
-          Importance.LOW,
-          "Enable or disable writing keys to storage.",
-          group,
-          ++orderInGroup,
-          Width.SHORT,
-          "Store kafka keys",
-          Collections.singletonList(KEYS_FORMAT_CLASS_CONFIG)
-      );
-
-      configDef.define(
-          STORE_KAFKA_HEADERS_CONFIG,
-          Type.BOOLEAN,
-          false,
-          Importance.LOW,
-          "Enable or disable writing headers to storage.",
-          group,
-          ++orderInGroup,
-          Width.SHORT,
-          "Store kafka headers",
-          Collections.singletonList(HEADERS_FORMAT_CLASS_CONFIG)
-      );
-
-      configDef.define(
-          KEYS_FORMAT_CLASS_CONFIG,
-          Type.CLASS,
-          KEYS_FORMAT_CLASS_DEFAULT,
-          Importance.LOW,
-          "The format class to use when writing keys to the store.",
-          group,
-          ++orderInGroup,
-          Width.NONE,
-          "Keys format class",
-          KEYS_FORMAT_CLASS_RECOMMENDER
-      );
-
-      configDef.define(
-          HEADERS_FORMAT_CLASS_CONFIG,
-          Type.CLASS,
-          HEADERS_FORMAT_CLASS_DEFAULT,
-          Importance.LOW,
-          "The format class to use when writing headers to the store.",
-          group,
-          ++orderInGroup,
-          Width.NONE,
-          "Headers format class",
-          HEADERS_FORMAT_CLASS_RECOMMENDER
-      );
-
-      configDef.define(
-          S3_PATH_STYLE_ACCESS_ENABLED_CONFIG,
-          Type.BOOLEAN,
-          S3_PATH_STYLE_ACCESS_ENABLED_DEFAULT,
-          Importance.LOW,
-          "Specifies whether or not to enable path style access to the bucket used by the "
-              + "connector",
-          group,
-          ++orderInGroup,
-          Width.SHORT,
-          "Enable Path Style Access to S3"
-      );
-      configDef.define(
-          ELASTIC_BUFFER_ENABLE,
-          Type.BOOLEAN,
-          ELASTIC_BUFFER_ENABLE_DEFAULT,
-          Importance.LOW,
-          "Specifies whether or not to allocate elastic buffer for staging s3-part to save memory."
-              + " Note that this may cause decreased performance or increased CPU usage",
-          group,
-          ++orderInGroup,
-          Width.LONG,
-          "Enable elastic buffer to staging s3-part"
-      );
-
-      configDef.define(
-          ELASTIC_BUFFER_INIT_CAPACITY,
-          Type.INT,
-          ELASTIC_BUFFER_INIT_CAPACITY_DEFAULT,
-          atLeast(4096),
-          Importance.LOW,
-          "Elastic buffer initial capacity.",
-          group,
-          ++orderInGroup,
-          Width.LONG,
-          "Elastic buffer initial capacity"
-      );
-    }
-
-    {
-      final String group = "Hive";
-      int orderInGroup = 0;
-      configDef.define(
-          HIVE_TABLE_NAME_CONFIG,
-          Type.STRING,
-          HIVE_TABLE_NAME_DEFAULT,
-          Importance.LOW,
-          HIVE_TABLE_NAME_DOC,
-          group,
-          ++orderInGroup,
-          Width.SHORT,
-          HIVE_TABLE_NAME_DISPLAY
-      );
-
-      configDef.define(
-          HIVE_S3_PROTOCOL_CONFIG,
-          Type.STRING,
-          HIVE_S3_PROTOCOL_DEFAULT,
-          Importance.LOW,
-          HIVE_S3_PROTOCOL_DOC,
-          group,
-          ++orderInGroup,
-          Width.SHORT,
-          HIVE_S3_PROTOCOL_DISPLAY
-      );
 
       configDef.define(
           MAX_OPEN_FILES_PER_PARTITION_CONFIG,
@@ -793,9 +670,136 @@ public class S3SinkConnectorConfig extends StorageSinkConnectorConfig {
           "Separate file per schema version"
       );
     }
+
+    addKeysAndHeadersConfigDefs(configDef);
+
+    addHiveConfigDefs(configDef);
+
     return configDef;
   }
 
+  private static void addKeysAndHeadersConfigDefs(final ConfigDef configDef) {
+    final String group = "Keys and Headers";
+    int orderInGroup = 0;
+
+    configDef.define(
+        STORE_KAFKA_KEYS_CONFIG,
+        Type.BOOLEAN,
+        false,
+        Importance.LOW,
+        "Enable or disable writing keys to storage.",
+        group,
+        ++orderInGroup,
+        Width.SHORT,
+        "Store kafka keys",
+        Collections.singletonList(KEYS_FORMAT_CLASS_CONFIG)
+    );
+
+    configDef.define(
+        STORE_KAFKA_HEADERS_CONFIG,
+        Type.BOOLEAN,
+        false,
+        Importance.LOW,
+        "Enable or disable writing headers to storage.",
+        group,
+        ++orderInGroup,
+        Width.SHORT,
+        "Store kafka headers",
+        Collections.singletonList(HEADERS_FORMAT_CLASS_CONFIG)
+    );
+
+    configDef.define(
+        KEYS_FORMAT_CLASS_CONFIG,
+        Type.CLASS,
+        KEYS_FORMAT_CLASS_DEFAULT,
+        Importance.LOW,
+        "The format class to use when writing keys to the store.",
+        group,
+        ++orderInGroup,
+        Width.NONE,
+        "Keys format class",
+        KEYS_FORMAT_CLASS_RECOMMENDER
+    );
+
+    configDef.define(
+        HEADERS_FORMAT_CLASS_CONFIG,
+        Type.CLASS,
+        HEADERS_FORMAT_CLASS_DEFAULT,
+        Importance.LOW,
+        "The format class to use when writing headers to the store.",
+        group,
+        ++orderInGroup,
+        Width.NONE,
+        "Headers format class",
+        HEADERS_FORMAT_CLASS_RECOMMENDER
+    );
+
+    configDef.define(
+        S3_PATH_STYLE_ACCESS_ENABLED_CONFIG,
+        Type.BOOLEAN,
+        S3_PATH_STYLE_ACCESS_ENABLED_DEFAULT,
+        Importance.LOW,
+        "Specifies whether or not to enable path style access to the bucket used by the "
+            + "connector",
+        group,
+        ++orderInGroup,
+        Width.SHORT,
+        "Enable Path Style Access to S3"
+    );
+    configDef.define(
+        ELASTIC_BUFFER_ENABLE,
+        Type.BOOLEAN,
+        ELASTIC_BUFFER_ENABLE_DEFAULT,
+        Importance.LOW,
+        "Specifies whether or not to allocate elastic buffer for staging s3-part to save memory."
+            + " Note that this may cause decreased performance or increased CPU usage",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "Enable elastic buffer to staging s3-part"
+    );
+
+    configDef.define(
+        ELASTIC_BUFFER_INIT_CAPACITY,
+        Type.INT,
+        ELASTIC_BUFFER_INIT_CAPACITY_DEFAULT,
+        atLeast(4096),
+        Importance.LOW,
+        "Elastic buffer initial capacity.",
+        group,
+        ++orderInGroup,
+        Width.LONG,
+        "Elastic buffer initial capacity"
+    );
+  }
+
+  private static void addHiveConfigDefs(final ConfigDef configDef) {
+    final String group = "Hive";
+    int orderInGroup = 0;
+    configDef.define(
+        HIVE_TABLE_NAME_CONFIG,
+        Type.STRING,
+        HIVE_TABLE_NAME_DEFAULT,
+        Importance.LOW,
+        HIVE_TABLE_NAME_DOC,
+        group,
+        ++orderInGroup,
+        Width.SHORT,
+        HIVE_TABLE_NAME_DISPLAY
+    );
+
+    configDef.define(
+        HIVE_S3_PROTOCOL_CONFIG,
+        Type.STRING,
+        HIVE_S3_PROTOCOL_DEFAULT,
+        Importance.LOW,
+        HIVE_S3_PROTOCOL_DOC,
+        group,
+        ++orderInGroup,
+        Width.SHORT,
+        HIVE_S3_PROTOCOL_DISPLAY
+    );
+  }
 
   public S3SinkConnectorConfig(Map<String, String> props) {
     this(newConfigDef(), props);
