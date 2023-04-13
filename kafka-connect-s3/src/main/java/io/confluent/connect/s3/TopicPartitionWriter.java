@@ -87,6 +87,7 @@ public class TopicPartitionWriter {
   private long nextScheduledRotation;
   private long currentOffset;
   private final int maxOpenFilesPerPartition;
+  private final boolean separateFilePerSchemaVersion;
   private Long currentTimestamp;
   private String currentEncodedPartition;
   private final Map<String, Long> currentTimestamps;
@@ -175,6 +176,9 @@ public class TopicPartitionWriter {
     maxOpenFilesPerPartition = connectorConfig.getInt(
         S3SinkConnectorConfig.MAX_OPEN_FILES_PER_PARTITION_CONFIG);
 
+    separateFilePerSchemaVersion = connectorConfig.getBoolean(
+        S3SinkConnectorConfig.SEPARATE_FILE_PER_SCHEMA_VERSION_CONFIG);
+
     buffer = new LinkedList<>();
     commitFiles = new HashMap<>();
     writers = new HashMap<>();
@@ -248,9 +252,13 @@ public class TopicPartitionWriter {
         // fallthrough
       case WRITE_PARTITION_PAUSED:
         SinkRecord record = buffer.peek();
+        Schema valueSchema = record.valueSchema();
         String encodedPartition;
         try {
           encodedPartition = partitioner.encodePartition(record, now);
+          if (separateFilePerSchemaVersion) {
+            encodedPartition = encodedPartition + fileDelim + valueSchema.version();
+          }
         } catch (PartitionException e) {
           if (reporter != null) {
             reporter.report(record, e);
@@ -270,7 +278,6 @@ public class TopicPartitionWriter {
           }
         }
 
-        Schema valueSchema = record.valueSchema();
         Schema currentValueSchema = currentSchemas.get(encodedPartition);
         if (currentValueSchema == null) {
           currentSchemas.put(encodedPartition, valueSchema);
@@ -639,9 +646,15 @@ public class TopicPartitionWriter {
     if (commitFiles.containsKey(encodedPartition)) {
       commitFile = commitFiles.get(encodedPartition);
     } else {
+      String tmp = encodedPartition;
+      String schemaVersionSuffix = "";
+      if (separateFilePerSchemaVersion) {
+        tmp = encodedPartition.substring(0, encodedPartition.lastIndexOf(fileDelim));
+        schemaVersionSuffix = encodedPartition.substring(encodedPartition.lastIndexOf(fileDelim));
+      }
       long startOffset = startOffsets.get(encodedPartition);
-      String prefix = getDirectoryPrefix(encodedPartition);
-      commitFile = fileKeyToCommit(prefix, startOffset);
+      String prefix = getDirectoryPrefix(tmp);
+      commitFile = fileKeyToCommit(prefix, startOffset, schemaVersionSuffix);
       commitFiles.put(encodedPartition, commitFile);
     }
     return commitFile;
@@ -654,12 +667,13 @@ public class TopicPartitionWriter {
            : suffix;
   }
 
-  private String fileKeyToCommit(String dirPrefix, long startOffset) {
+  private String fileKeyToCommit(String dirPrefix, long startOffset, String schemaVersionSuffix) {
     String name = tp.topic()
                       + fileDelim
                       + tp.partition()
                       + fileDelim
                       + String.format(zeroPadOffsetFormat, startOffset)
+                      + schemaVersionSuffix
                       + extension;
     return fileKey(topicsDir, dirPrefix, name);
   }

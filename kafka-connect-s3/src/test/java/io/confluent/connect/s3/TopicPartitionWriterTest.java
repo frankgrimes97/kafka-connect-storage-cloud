@@ -70,6 +70,7 @@ import io.confluent.common.utils.Time;
 import io.confluent.connect.s3.format.avro.AvroFormat;
 import io.confluent.connect.s3.hive.HiveMetaStoreUpdater;
 import io.confluent.connect.s3.hive.NoOpHiveMetaStoreUpdater;
+import io.confluent.connect.s3.format.parquet.ParquetFormat;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.storage.S3Storage;
 import io.confluent.connect.s3.util.FileUtils;
@@ -91,6 +92,7 @@ import org.mockito.Mockito;
 import static io.confluent.connect.s3.util.Utils.sinkRecordToLoggableString;
 import static io.confluent.connect.storage.StorageSinkConnectorConfig.FLUSH_SIZE_CONFIG;
 import static io.confluent.connect.storage.partitioner.PartitionerConfig.PARTITION_FIELD_NAME_CONFIG;
+import java.util.stream.Collectors;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -1444,6 +1446,115 @@ public class TopicPartitionWriterTest extends TestWithMockedS3 {
                                                   ZERO_PAD_FMT));
     }
     verify(expectedFiles, 4, schema, records);
+  }
+
+  private List<String> testWriteRecordAppendSchemaVersion(
+      final boolean appendSchema,
+      final int flushSize,
+      final int maxOpenFiles,
+      final int numberOfTestRecords
+    ) throws Exception {
+
+    localProps.put(S3SinkConnectorConfig.SEPARATE_FILE_PER_SCHEMA_VERSION_CONFIG, String.valueOf(appendSchema));
+    localProps.put(PartitionerConfig.PARTITIONER_CLASS_CONFIG, TimeBasedPartitioner.class.getName());
+    localProps.put(PartitionerConfig.PATH_FORMAT_CONFIG, "'dt'=YYYY-MM-dd/'hh'=HH/'minute'=mm");
+    localProps.put(PartitionerConfig.PARTITION_DURATION_MS_CONFIG, "900000");
+    localProps.put(S3SinkConnectorConfig.FLUSH_SIZE_CONFIG, String.valueOf(flushSize));
+    localProps.put(
+        S3SinkConnectorConfig.MAX_OPEN_FILES_PER_PARTITION_CONFIG,
+        String.valueOf(maxOpenFiles)
+    );
+    setUp();
+
+    // Define parquet format
+    Format<S3SinkConnectorConfig, String> format = new ParquetFormat(storage);
+    writerProvider = format.getRecordWriterProvider();
+    extension = writerProvider.getExtension();
+
+    // Define the partitioner
+    Partitioner<?> partitioner = new TimeBasedPartitioner<>();
+    partitioner.configure(parsedConfig);
+    TopicPartitionWriter topicPartitionWriter = new TopicPartitionWriter(
+        TOPIC_PARTITION, storage, hiveUpdater, writerProvider, partitioner,  connectorConfig, context, null);
+
+    // Mock sink records
+    List<SinkRecord> sinkRecords = createRecordsWithAlternatingSchemas(numberOfTestRecords, 0);
+    sinkRecords.stream().forEach(record -> topicPartitionWriter.buffer(record));
+
+    // Test actual write
+    topicPartitionWriter.write();
+    topicPartitionWriter.close();
+
+    List<S3ObjectSummary> summaries = listObjects(S3_TEST_BUCKET_NAME, null, s3);
+    return summaries.stream().map(m -> m.getKey()).collect(Collectors.toList());
+  }
+
+  @Test
+  public void testWriteRecordAppendSchemaVersionDisabled() throws Exception {
+    final List<String> writtenFiles = testWriteRecordAppendSchemaVersion(false, 1, 1, 1);
+    assertEquals(1, writtenFiles.size());
+
+    // check that schema version not in filename
+    assertTrue(
+      writtenFiles.get(0)
+        .matches("topics_test-topic_dt=\\d{4}-\\d{2}-\\d{2}/hh=\\d{2}/minute=\\d{2}_test-topic#12#0000000000.snappy.parquet")
+    );
+  }
+
+  @Test
+  public void testWriteRecordAppendSchemaVersionEnabled() throws Exception {
+    final List<String> writtenFiles = testWriteRecordAppendSchemaVersion(true, 10, 1, 10);
+    // 2 files written, 1 per schema version
+    assertEquals(2, writtenFiles.size());
+
+    // check that schema versions are present in the generated filenames
+    assertTrue(
+      writtenFiles.get(0)
+        .matches("topics_test-topic_dt=\\d{4}-\\d{2}-\\d{2}/hh=\\d{2}/minute=\\d{2}_test-topic#12#0000000000#1.snappy.parquet")
+    );
+    assertTrue(
+      writtenFiles.get(1)
+        .matches("topics_test-topic_dt=\\d{4}-\\d{2}-\\d{2}/hh=\\d{2}/minute=\\d{2}_test-topic#12#0000000001#2.snappy.parquet")
+    );
+  }
+
+  @Test
+  public void testWriteRecordAppendSchemaVersionEnabledMaxOpenFilesPerPartitionGreaterThanOne() throws Exception {
+    final List<String> writtenFiles = testWriteRecordAppendSchemaVersion(true, 5, 2, 10);
+    // 2 files written, 1 per schema version (flush size is per open file)
+    assertEquals(2, writtenFiles.size());
+
+    // check that schema versions are present in the generated filenames
+    assertTrue(
+      writtenFiles.get(0)
+        .matches("topics_test-topic_dt=\\d{4}-\\d{2}-\\d{2}/hh=\\d{2}/minute=\\d{2}_test-topic#12#0000000000#1.snappy.parquet")
+    );
+    assertTrue(
+      writtenFiles.get(1)
+        .matches("topics_test-topic_dt=\\d{4}-\\d{2}-\\d{2}/hh=\\d{2}/minute=\\d{2}_test-topic#12#0000000001#2.snappy.parquet")
+    );
+  }
+
+
+  protected List<SinkRecord> createRecordsWithAlternatingSchemas(int size, long startOffset) {
+    String key = "key";
+    Schema schema = createSchema();
+    Struct record = createRecord(schema);
+    Schema newSchema = createNewSchema();
+    Struct newRecord = createNewRecord(newSchema);
+
+    int limit = (size / 2) * 2;
+    boolean remainder = size % 2 > 0;
+    List<SinkRecord> sinkRecords = new ArrayList<>();
+    for (long offset = startOffset; offset < startOffset + limit; ++offset) {
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, record, offset));
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, newSchema, newRecord, ++offset));
+    }
+    if (remainder) {
+      sinkRecords.add(new SinkRecord(TOPIC, PARTITION, Schema.STRING_SCHEMA, key, schema, record,
+                                     startOffset + size - 1));
+    }
+    return sinkRecords;
   }
 
   // Test if a given exception type was reported to the DLQ
